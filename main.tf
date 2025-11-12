@@ -93,8 +93,7 @@ curl -L https://packages.gitlab.com/install/repositories/runner/gitlab-runner/sc
 sudo yum install -y gitlab-runner-18.5.0-1
 
 echo "Installing fleeting plugin for GCP"
-curl -L "https://gitlab.com/gitlab-org/fleeting/fleeting-plugin-googlecompute/-/releases/permalink/latest/downloads/binaries/fleeting-plugin-googlecompute-linux-amd64" -o /tmp/fleeting-plugin-googlecompute
-sudo install -m755 /tmp/fleeting-plugin-googlecompute /usr/local/bin/fleeting-plugin-googlecompute
+sudo gitlab-runner fleeting install
 
 echo "Creating GitLab Runner configuration"
 cat > /etc/gitlab-runner/config.toml <<EOF
@@ -148,6 +147,7 @@ check_interval = 0
     [[runners.autoscaler.policy]]
       idle_count = 0
       idle_time = "${var.ci_worker_idle_time}s"
+      preemptive_mode = false
 EOF
 
 echo "Starting GitLab Runner service"

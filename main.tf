@@ -89,47 +89,49 @@ resource "google_compute_instance" "ci_runner" {
 
   metadata_startup_script = <<SCRIPT
 set -e
-
 echo "Installing GitLab CI Runner"
 curl -L https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.rpm.sh | sudo bash
-sudo yum install -y gitlab-runner
+sudo yum install -y gitlab-runner-18.5.0-0
 
-echo "Installing docker machine."
-curl -L https://github.com/docker/machine/releases/download/v0.16.2/docker-machine-Linux-x86_64 -o /tmp/docker-machine
-sudo install /tmp/docker-machine /usr/local/bin/docker-machine
+echo "Installing fleeting plugin for GCP"
+# Download and install fleeting-plugin-googlecompute
+curl -L "https://gitlab.com/gitlab-org/fleeting/fleeting-plugin-googlecompute/-/releases/permalink/latest/downloads/binaries/fleeting-plugin-googlecompute-linux-amd64" -o /tmp/fleeting-plugin-googlecompute
+sudo install -m755 /tmp/fleeting-plugin-googlecompute /usr/local/bin/fleeting-plugin-googlecompute
 
 echo "Setting GitLab concurrency"
 sed -i "s/concurrent = .*/concurrent = ${var.ci_concurrency}/" /etc/gitlab-runner/config.toml
 
 echo "Registering GitLab CI runner with GitLab instance."
-sudo gitlab-runner register -n  \
+sudo gitlab-runner register -n \
     --url ${var.gitlab_url} \
     --token ${var.ci_token} \
-    --executor "docker+machine" \
-    --docker-image "alpine:latest"  \
-    --machine-machine-driver google \
+    --executor "docker-autoscaler" \
+    --docker-image "alpine:latest" \
     --docker-privileged=${var.docker_privileged} \
-    --machine-idle-time ${var.ci_worker_idle_time} \
-    --machine-machine-name "${var.gcp_resource_prefix}-worker-%s" \
-    --machine-machine-options "google-project=${var.gcp_project}" \
-    --machine-machine-options "google-machine-type=${var.ci_worker_instance_type}" \
-    --machine-machine-options "google-machine-image=${var.ci_worker_image}" \
-    --machine-machine-options "google-zone=${var.gcp_zone}" \
-    --machine-machine-options "google-service-account=${google_service_account.ci_worker.email}" \
-    --machine-machine-options "google-scopes=https://www.googleapis.com/auth/cloud-platform" \
-    --machine-machine-options "google-disk-type=pd-ssd" \
-    --machine-machine-options "google-disk-size=${var.ci_worker_disk_size}" \
-    --machine-machine-options "google-tags=${var.ci_worker_instance_tags}" \
-    --machine-machine-options "google-use-internal-ip" \
-    --machine-machine-options "google-network=${var.ci_runner_network}" \
-    %{if var.ci_runner_subnetwork != ""}--machine-machine-options "google-subnetwork=${var.ci_runner_subnetwork}"%{endif} \
+    --autoscaler-connector-config-plugin "fleeting-plugin-googlecompute" \
+    --autoscaler-plugin-config "name=fleeting-plugin-googlecompute" \
+    --autoscaler-plugin-config "project=${var.gcp_project}" \
+    --autoscaler-plugin-config "zone=${var.gcp_zone}" \
+    --autoscaler-plugin-config "machine_type=${var.ci_worker_instance_type}" \
+    --autoscaler-plugin-config "source_image=${var.ci_worker_image}" \
+    --autoscaler-plugin-config "service_account=${google_service_account.ci_worker.email}" \
+    --autoscaler-plugin-config "disk_size=${var.ci_worker_disk_size}" \
+    --autoscaler-plugin-config "disk_type=pd-ssd" \
+    --autoscaler-plugin-config "network=${var.ci_runner_network}" \
+    %{if var.ci_runner_subnetwork != ""}--autoscaler-plugin-config "subnetwork=${var.ci_runner_subnetwork}"%{endif} \
+    --autoscaler-plugin-config "tags=${var.ci_worker_instance_tags}" \
+    --autoscaler-plugin-config "use_internal_ip=true" \
+    --autoscaler-plugin-config "scopes=https://www.googleapis.com/auth/cloud-platform" \
+    --autoscaler-capacity-idle ${var.ci_worker_idle_time} \
+    --autoscaler-max-use-count 1 \
+    --autoscaler-max-instances 10 \
     %{if var.pre_clone_script != ""}--pre-clone-script ${replace(format("%q", var.pre_clone_script), "$", "\\$")}%{endif} \
     %{if var.post_clone_script != ""}--post-clone-script ${replace(format("%q", var.post_clone_script), "$", "\\$")}%{endif} \
     %{if var.pre_build_script != ""}--pre-build-script ${replace(format("%q", var.pre_build_script), "$", "\\$")}%{endif} \
     %{if var.post_build_script != ""}--post-build-script ${replace(format("%q", var.post_build_script), "$", "\\$")}%{endif} \
     && true
 
-sudo gitlab-runner verify
+gitlab-runner verify
 
 echo "GitLab CI Runner installation complete"
 SCRIPT

@@ -166,6 +166,12 @@ SCRIPT
   }
 }
 
+
+data "google_compute_image" "ci_worker_image" {
+  family  = "ubuntu-2404-lts-amd64"
+  project = var.gcp_project
+}
+
 resource "google_compute_instance_template" "gitlab_runner_worker" {
   name_prefix  = "gitlab-runner-worker-"
   description  = "Template for GitLab Runner worker instances"
@@ -173,7 +179,7 @@ resource "google_compute_instance_template" "gitlab_runner_worker" {
   project      = "kitopi-terraform-admin"
 
   disk {
-    source_image = "ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20241115"
+    source_image = data.google_compute_image.ci_worker_image.self_link
     disk_type    = "pd-ssd"
     disk_size_gb = 10
     auto_delete  = true

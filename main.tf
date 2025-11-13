@@ -92,9 +92,6 @@ echo "Installing GitLab CI Runner"
 curl -L https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.rpm.sh | sudo bash
 sudo yum install -y gitlab-runner-18.5.0-1
 
-echo "Installing fleeting plugin for GCP"
-sudo gitlab-runner fleeting install
-
 echo "Creating GitLab Runner configuration"
 cat > /etc/gitlab-runner/config.toml <<EOF
 concurrent = ${var.ci_concurrency}
@@ -124,13 +121,13 @@ check_interval = 0
   %{endif}
   
   [runners.autoscaler]
-    plugin = "fleeting-plugin-googlecompute"
+    plugin = "googlecloud"
     capacity_per_instance = 1
     max_use_count = 1
     max_instances = 10
     
     [runners.autoscaler.plugin_config]
-      name = "fleeting-plugin-googlecompute"
+      name = "googlecloud"
       project = "${var.gcp_project}"
       zone = "${var.gcp_zone}"
       machine_type = "${var.ci_worker_instance_type}"
@@ -150,6 +147,9 @@ check_interval = 0
       preemptive_mode = false
 EOF
 
+echo "Installing fleeting plugin for GCP"
+sudo gitlab-runner fleeting install
+
 echo "Starting GitLab Runner service"
 sudo systemctl enable gitlab-runner
 sudo systemctl restart gitlab-runner
@@ -164,4 +164,111 @@ SCRIPT
     email  = google_service_account.ci_runner.email
     scopes = ["cloud-platform"]
   }
+}
+
+resource "google_compute_instance_template" "gitlab_runner_worker" {
+  name_prefix  = "gitlab-runner-worker-"
+  description  = "Template for GitLab Runner worker instances"
+  machine_type = "n1-standard-1"
+  project      = "kitopi-terraform-admin"
+
+  disk {
+    source_image = "ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20241115"
+    disk_type    = "pd-ssd"
+    disk_size_gb = 10
+    auto_delete  = true
+    boot         = true
+  }
+
+  network_interface {
+    network = "default"
+  }
+
+  service_account {
+    email  = "gitlab-ci-worker@kitopi-terraform-admin.iam.gserviceaccount.com"
+    scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+  }
+
+  # Tags for firewall rules
+  tags = ["gitlab-ci-worker"]
+
+  metadata = {
+    enable-oslogin = "TRUE"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "google_compute_instance_group_manager" "gitlab_runner_mig" {
+  name               = "googlecloud"
+  base_instance_name = "gitlab-runner-worker"
+  zone               = "europe-west2-a"
+  project            = "kitopi-terraform-admin"
+  description        = "Managed Instance Group for GitLab Runner workers"
+
+  version {
+    instance_template = google_compute_instance_template.gitlab_runner_worker.id
+  }
+
+  target_size = 0
+
+  update_policy {
+    type                         = "OPPORTUNISTIC"
+    minimal_action               = "REPLACE"
+    max_surge_fixed              = 0
+    max_unavailable_fixed        = 0
+    replacement_method           = "SUBSTITUTE"
+    instance_redistribution_type = "NONE"
+  }
+
+  auto_healing_policies {
+    health_check      = google_compute_health_check.gitlab_runner_hc.id
+    initial_delay_sec = 300
+  }
+
+  # Stateless configuration
+  stateful_disk        = []
+  stateful_internal_ip = []
+  stateful_external_ip = []
+
+  instance_lifecycle_policy {
+    default_action_on_failure = "DO_NOTHING"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [
+      target_size
+    ]
+  }
+}
+
+resource "google_compute_health_check" "gitlab_runner_hc" {
+  name                = "gitlab-runner-hc"
+  project             = "kitopi-terraform-admin"
+  check_interval_sec  = 30
+  timeout_sec         = 10
+  healthy_threshold   = 2
+  unhealthy_threshold = 3
+
+  tcp_health_check {
+    port = "22"
+  }
+}
+
+# Firewall rule to allow internal communication
+resource "google_compute_firewall" "gitlab_runner_internal" {
+  name    = "gitlab-runner-internal"
+  network = "default"
+  project = "kitopi-terraform-admin"
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22", "2376"]
+  }
+
+  source_ranges = ["10.128.0.0/9"]
+  target_tags   = ["gitlab-ci-worker"]
 }

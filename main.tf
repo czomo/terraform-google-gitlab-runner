@@ -220,7 +220,6 @@ resource "google_compute_instance_group_manager" "gitlab_runner_mig" {
     max_surge_fixed              = 0
     max_unavailable_fixed        = 0
     replacement_method           = "SUBSTITUTE"
-    instance_redistribution_type = "NONE"
   }
 
   auto_healing_policies {
@@ -228,14 +227,9 @@ resource "google_compute_instance_group_manager" "gitlab_runner_mig" {
     initial_delay_sec = 300
   }
 
-  # Stateless configuration
-  stateful_disk        = []
-  stateful_internal_ip = []
-  stateful_external_ip = []
-
-  instance_lifecycle_policy {
-    default_action_on_failure = "DO_NOTHING"
-  }
+#  instance_lifecycle_policy {
+#    default_action_on_failure = "DO_NOTHING"
+#  }
 
   lifecycle {
     create_before_destroy = true

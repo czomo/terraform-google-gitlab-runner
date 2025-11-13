@@ -169,7 +169,7 @@ SCRIPT
 
 data "google_compute_image" "ci_worker_image" {
   family  = "ubuntu-2404-lts-amd64"
-  project = var.gcp_project
+  project = "ubuntu-os-cloud"
 }
 
 resource "google_compute_instance_template" "gitlab_runner_worker" {

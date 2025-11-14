@@ -181,7 +181,7 @@ data "cloudinit_config" "cloud_config" {
     filename     = "cloud-config.yaml"
     content_type = "text/cloud-config"
 
-    content = templatefile("${path.module}/cloud-config.yaml", {
+    content = templatefile("cloud-config.yaml", {
       SSH_AUTHORIZED_KEY   = tls_private_key.access_key.public_key_openssh
     })
   }

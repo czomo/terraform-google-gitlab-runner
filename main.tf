@@ -130,17 +130,13 @@ check_interval = 0
       name = "googlecloud"
       project = "${var.gcp_project}"
       zone = "${var.gcp_zone}"
-      machine_type = "${var.ci_worker_instance_type}"
-      source_image = "${var.ci_worker_image}"
-      service_account = "${google_service_account.ci_worker.email}"
-      disk_size = ${var.ci_worker_disk_size}
-      disk_type = "pd-ssd"
-      network = "${var.ci_runner_network}"
-      %{if var.ci_runner_subnetwork != ""}subnetwork = "${var.ci_runner_subnetwork}"%{endif}
-      tags = "${var.ci_worker_instance_tags}"
-      use_internal_ip = true
-      scopes = "https://www.googleapis.com/auth/cloud-platform"
-    
+
+    [runners.autoscaler.connector_config]
+      username               = "ubuntu"
+      use_external_addr      = false
+      use_static_credentials = true
+      key_path               = "/root/.ssh/id_rsa"
+
     [[runners.autoscaler.policy]]
       idle_count = 0
       idle_time = "${var.ci_worker_idle_time}s"
@@ -172,6 +168,29 @@ data "google_compute_image" "ci_worker_image" {
   project = "ubuntu-os-cloud"
 }
 
+data "cloudinit_config" "cloud_config" {
+  gzip          = false
+  base64_encode = false
+
+  part {
+    filename     = "cloud-config.yaml"
+    content_type = "text/cloud-config"
+
+    content = templatefile("${path.module}/cloud-config.yaml", {
+      SSH_AUTHORIZED_KEY   = var.ssh_public_key
+      HOST_METRIC_INTERVAL = var.host_metric_interval
+    })
+  }
+}
+
+/// This is a resource that does nothing but include the pool-ignition.yaml file in the dependency graph
+/// Inclusion in the graph then allows us to recreate the runner when the config changes
+resource "null_resource" "cloudinit" {
+  triggers = {
+    config = sha1(data.cloudinit_config.cloud_config.rendered)
+  }
+}
+
 resource "google_compute_instance_template" "gitlab_runner_worker" {
   name_prefix  = "gitlab-runner-worker-"
   description  = "Template for GitLab Runner worker instances"
@@ -199,7 +218,10 @@ resource "google_compute_instance_template" "gitlab_runner_worker" {
   tags = ["gitlab-ci-worker"]
 
   metadata = {
-    enable-oslogin = "TRUE"
+    google-logging-enabled    = "true"
+    google-monitoring-enabled = var.enable_ops_agent
+    block-project-ssh-keys    = true
+    user-data                 = data.cloudinit_config.cloud_config.rendered
   }
 
   lifecycle {

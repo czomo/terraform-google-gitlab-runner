@@ -223,7 +223,6 @@ resource "google_compute_instance_template" "gitlab_runner_worker" {
 
   metadata = {
     google-logging-enabled    = "true"
-    google-monitoring-enabled = var.enable_ops_agent
     block-project-ssh-keys    = true
     user-data                 = data.cloudinit_config.cloud_config.rendered
   }

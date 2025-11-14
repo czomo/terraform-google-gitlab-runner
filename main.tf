@@ -171,8 +171,6 @@ SCRIPT
     block-project-ssh-keys = true
     ssh-key-to-use         = tls_private_key.access_key.private_key_pem
   }
-
-  metadata_startup_script = templatefile("${path.module}/init.sh")
 }
 
 

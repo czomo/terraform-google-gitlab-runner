@@ -160,6 +160,11 @@ SCRIPT
     email  = google_service_account.ci_runner.email
     scopes = ["cloud-platform"]
   }
+
+  metadata = {
+    block-project-ssh-keys = true
+    ssh-key-to-use         = tls_private_key.access_key.private_key_pem
+  }
 }
 
 
@@ -177,8 +182,7 @@ data "cloudinit_config" "cloud_config" {
     content_type = "text/cloud-config"
 
     content = templatefile("${path.module}/cloud-config.yaml", {
-      SSH_AUTHORIZED_KEY   = var.ssh_public_key
-      HOST_METRIC_INTERVAL = var.host_metric_interval
+      SSH_AUTHORIZED_KEY   = tls_private_key.access_key.public_key_openssh
     })
   }
 }

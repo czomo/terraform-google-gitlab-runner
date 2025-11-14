@@ -146,6 +146,12 @@ EOF
 echo "Installing fleeting plugin for GCP"
 sudo gitlab-runner fleeting install
 
+echo "    StrictHostKeyChecking no" >> /etc/ssh/ssh_config
+
+# Download static private key
+curl http://metadata.google.internal/computeMetadata/v1/instance/attributes/ssh-key-to-use -H 'Metadata-Flavor: Google' -o /root/.ssh/id_rsa
+sudo chmod 600 /root/.ssh/id_rsa
+
 echo "Starting GitLab Runner service"
 sudo systemctl enable gitlab-runner
 sudo systemctl restart gitlab-runner

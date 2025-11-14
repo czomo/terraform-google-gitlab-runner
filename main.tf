@@ -216,7 +216,13 @@ resource "google_compute_instance_template" "gitlab_runner_worker" {
   }
 
   network_interface {
-    network = "default"
+    network    = var.ci_runner_network
+    subnetwork = var.ci_runner_subnetwork
+
+
+    access_config {
+      // Ephemeral IP
+    }
   }
 
   service_account {

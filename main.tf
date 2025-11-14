@@ -165,6 +165,8 @@ SCRIPT
     block-project-ssh-keys = true
     ssh-key-to-use         = tls_private_key.access_key.private_key_pem
   }
+
+  metadata_startup_script = templatefile("${path.module}/init.sh")
 }
 
 
@@ -181,7 +183,7 @@ data "cloudinit_config" "cloud_config" {
     filename     = "cloud-config.yaml"
     content_type = "text/cloud-config"
 
-    content = templatefile("${path.root}/cloud-config.yaml", {
+    content = templatefile("${path.module}/cloud-config.yaml", {
       SSH_AUTHORIZED_KEY   = tls_private_key.access_key.public_key_openssh
     })
   }
@@ -229,6 +231,9 @@ resource "google_compute_instance_template" "gitlab_runner_worker" {
 
   lifecycle {
     create_before_destroy = true
+    replace_triggered_by = [
+      null_resource.cloudinit.id
+    ]
   }
 }
 

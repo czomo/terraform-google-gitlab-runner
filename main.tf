@@ -132,7 +132,7 @@ check_interval = 0
       zone = "${var.gcp_zone}"
 
     [runners.autoscaler.connector_config]
-      username               = "ubuntu"
+      username               = "core"
       use_external_addr      = false
       use_static_credentials = true
       key_path               = "/root/.ssh/id_rsa"
@@ -175,8 +175,8 @@ SCRIPT
 
 
 data "google_compute_image" "ci_worker_image" {
-  family  = "ubuntu-2404-lts-amd64"
-  project = "ubuntu-os-cloud"
+  family  = "cos-stable"
+  project = "cos-cloud"
 }
 
 data "cloudinit_config" "cloud_config" {
